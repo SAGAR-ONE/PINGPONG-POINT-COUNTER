@@ -144,6 +144,11 @@ public class App {
     // ── Stats ─────────────────────────────────────────────────────────────
     static final MatchStats stats = new MatchStats();
 
+    // ── Serve tracking ────────────────────────────────────────────────────
+    // Serve switches every 2 points. P1 serves first.
+    static String servingPlayer   = "P1";   // "P1" or "P2"
+    static int    totalPointsDone = 0;      // total points scored this game
+
     // ── Restart flag ──────────────────────────────────────────────────────
     static volatile boolean restartRequested = false;
 
@@ -446,29 +451,39 @@ public class App {
                     }
                 }
 
-                // ── Scoreboard bar ─────────────────────────────────────────
+                // Scoreboard bar
                 Imgproc.rectangle(frame, new Point(0, 0),
                     new Point(frame.cols(), 55), new Scalar(20, 20, 20), -1);
 
-                String p1text = player1Name + ": " + scoreP1;
-                String p2text = player2Name + ": " + scoreP2;
+                // Build name strings with serve indicator (🏓 = serving)
+                String p1text = (servingPlayer.equals("P1") ? ">> " : "   ") + player1Name + ": " + scoreP1;
+                String p2text = player2Name + ": " + scoreP2 + (servingPlayer.equals("P2") ? " <<" : "   ");
 
-                drawText(frame, p1text, 10, 40, 1.0, new Scalar(100, 200, 255));
+                // P1 score — highlight yellow if serving
+                Scalar p1color = servingPlayer.equals("P1") ? new Scalar(0, 255, 255) : new Scalar(100, 200, 255);
+                drawText(frame, p1text, 10, 40, 0.9, p1color);
+
                 drawText(frame, "VS", frame.cols() / 2 - 18, 38,
                     0.8, new Scalar(255, 255, 255));
 
+                // P2 score — highlight yellow if serving
+                Scalar p2color = servingPlayer.equals("P2") ? new Scalar(0, 255, 255) : new Scalar(100, 255, 100);
                 int[]  p2baseline = new int[1];
                 Size   p2size     = Imgproc.getTextSize(p2text,
-                    Imgproc.FONT_HERSHEY_SIMPLEX, 1.0, 2, p2baseline);
+                    Imgproc.FONT_HERSHEY_SIMPLEX, 0.9, 2, p2baseline);
                 drawText(frame, p2text,
                     (int)(frame.cols() - p2size.width - 10), 40,
-                    1.0, new Scalar(100, 255, 100));
+                    0.9, p2color);
 
-                // Rally counter
+                // Rally counter + serve info below bar
+                String serveLabel = (servingPlayer.equals("P1") ? player1Name : player2Name) + " serving";
+                drawText(frame, serveLabel,
+                    frame.cols() / 2 - 60, 70,
+                    0.45, new Scalar(0, 255, 255));
                 drawText(frame,
                     "Rally: " + stats.currentRally,
-                    frame.cols() / 2 - 40, 55,
-                    0.5, new Scalar(200, 200, 200));
+                    frame.cols() / 2 - 40, 83,
+                    0.45, new Scalar(200, 200, 200));
 
                 // Flash point message
                 long now2 = System.currentTimeMillis();
@@ -638,8 +653,17 @@ public class App {
             pointMessage = "Point → " + player2Name + "!";
         }
         stats.recordPoint(scorer);
-        System.out.printf("Point! %s=%d  %s=%d%n",
-            player1Name, scoreP1, player2Name, scoreP2);
+
+        // Switch serve every 2 points
+        totalPointsDone++;
+        if (totalPointsDone % 2 == 0) {
+            servingPlayer = servingPlayer.equals("P1") ? "P2" : "P1";
+            String serverName = servingPlayer.equals("P1") ? player1Name : player2Name;
+            System.out.println("🏓 Serve → " + serverName);
+        }
+
+        System.out.printf("Point! %s=%d  %s=%d  Serving: %s%n",
+            player1Name, scoreP1, player2Name, scoreP2, servingPlayer);
     }
 
     static void resetBallTracking() {
@@ -667,6 +691,8 @@ public class App {
         stats.p2Consecutive      = 0;
         stats.totalRallyFrames   = 0;
         stats.rallyCount         = 0;
+        servingPlayer  = "P1";
+        totalPointsDone = 0;
         resetBallTracking();
         state = GameState.PLAYING;
         System.out.println("🔄 Game restarted!");
